@@ -59,6 +59,8 @@ typedef struct Queue{
  pthread_mutex_t* accountLocks;
  pthread_mutex_t queueMutex;
  int requestCounter = 1;
+ FILE *filePointer;
+ char* fileName;
 
 // START
 int main(int argc, char**argv){
@@ -66,8 +68,6 @@ int main(int argc, char**argv){
     // declare variables
     int numberOfWorkerThreads = 0;
     int numberOfAccounts = 0;
-    FILE *filePointer;
-    char* fileName;
     char* errorMessage1 = "Error: incorrect input. Exiting. \n";
    
 
@@ -124,6 +124,7 @@ int main(int argc, char**argv){
 
     /*initialize output file */
     filePointer = fopen(fileName, "w+");
+    fclose(filePointer);
 
     /*get user input*/
     while(INFINITE){
@@ -173,11 +174,13 @@ void parseUserRequest(char** commandString, int numInputs){
          req->startTime = time;
          req->requestID = requestCounter;
          req->checkAccountID = atoi(commandString[1]);
-         req->numberOfTransactions = 1;
+         req->numberOfTransactions = 0;
         //  end time still needs to be completed in worker thread
         // next request still needs to be completed in push thread
-        printf("----The value of the request is: %p\n", req);
+        printf("MAIN--ID %d\nThe value of the request is: %p\n",requestCounter, req);
+        requestCounter++;
         push(req);
+        sleep(1);
         // pthread_cond_signal(&waitForReadyJob);
     }
     else if(strcmp(commandString[0], "TRANS") == 0){
@@ -196,26 +199,40 @@ void* workerThreadRequestHandler(void *arg){
     // wait for the ready signal... should this come when we add a request to queue
     // pthread_cond_wait(&waitForReadyJob, &mutex);
 
-    int account_ID = *((int*) arg);
-    printf("Worker thread ID: %d\n", account_ID);
+    int thread_ID = *((int*) arg);
+    printf("Worker thread ID: %d\n", thread_ID);
 
     // pthread_mutex_unlock(&accountLocks[account_ID]);
 
     pthread_mutex_lock(&queueMutex); 
-    pthread_cond_wait(&forJobReady, &queueMutex);
-    // pthread_mutex_lock(&accountLocks[account_ID]);
-    Request *request = malloc(sizeof(Request));
-    request = pop(); 
-    printf("----The value of the request is: %p\n", request);
-    printf("----Request ID: %d", request->requestID);
-    // pthread_mutex_unlock(&accountLocks[account_ID]);
-    pthread_mutex_unlock(&queueMutex);
-    
+    for(;;){
+        while(jobQueue.numberOfJobs == 0){
+            pthread_cond_wait(&forJobReady, &queueMutex);
+        }
+        
+            Request *request = pop();
+            printf("POP--Worker number %d handling the job! The number of jobs in the queue: %d\n", thread_ID ,jobQueue.numberOfJobs);
+            // pthread_mutex_lock(&accountLocks[request->checkAccountID]);
+            //testing
+            printf("The value of the request is: %p\n", request);
+            printf("Request ID: %d\n\n", request->requestID);
 
-    /*Need to get jobs from queue here*/
-    /*wait condition*/
-    // print to file
+            filePointer = fopen(fileName, "a");
+            fprintf(filePointer, "%d\n",request->requestID);
+            fclose(filePointer);
+            fflush(stdout);
+        // pthread_mutex_unlock(&accountLocks[account_ID]);
+        // pthread_mutex_unlock(&accountLocks[request->checkAccountID]);
+        pthread_mutex_unlock(&queueMutex);
 
+        // pthread_cond_destroy(&forJobReady);
+        // pthread_cond_init(&forJobReady, NULL);
+        
+
+        /*Need to get jobs from queue here*/
+        /*wait condition*/
+        // print to file
+        }
     return NULL;
 }
 
@@ -252,13 +269,15 @@ Request* pop(){
 }
 
 void push(Request *newRequest){
-    printf("I am pushing to the queue\nThe requestID = %d\nThe check accountID = %d\nStart time = %ld.%06.ld\n",newRequest->requestID, newRequest->checkAccountID, newRequest->startTime.tv_sec, newRequest->startTime.tv_usec);
+    //testing
+    printf("PUSH--I am pushing to the queue\nThe requestID = %d\nThe check accountID = %d\nStart time = %ld.%06.ld\n",newRequest->requestID, newRequest->checkAccountID, newRequest->startTime.tv_sec, newRequest->startTime.tv_usec);
     
 
       if(jobQueue.numberOfJobs == 0){
         jobQueue.head = newRequest;
         jobQueue.tail = newRequest;
-        printf("----The value of the head is: %p\n", jobQueue.head);
+        printf("The value of the head is: %p\n", jobQueue.head);
+        printf("The value of the tail is: %p\n", jobQueue.tail);
         jobQueue.numberOfJobs++;
     }
     else if(jobQueue.numberOfJobs > 0){
@@ -267,9 +286,9 @@ void push(Request *newRequest){
         jobQueue.numberOfJobs++;
     }
 
-    
+    //testing
     printf("Number of jobs in the queue: %d\n", jobQueue.numberOfJobs);
-    printf("----The value of the request is: %p\n", newRequest);
+    printf("The value of the request is: %p\n", newRequest);
     pthread_cond_broadcast(&forJobReady);
 
     
