@@ -22,7 +22,7 @@ void* workerThreadRequestHandler();
 void freeStringArray(char** commandStringArray);
 void parseUserRequest(char** commandString, int numInputs);
 void push();
-Request* pop();
+
 // void recordRequest();
 // void presentInfoToUser();
 // void processRequestInBackground();
@@ -46,6 +46,8 @@ typedef struct Request{
     struct timeval startTime, endTime; //start time and end time for TIME
 } Request;
 
+Request* pop();
+
 typedef struct Queue{
     Request *head, *tail;
     int numberOfJobs; //number of jobs currently in queue
@@ -53,8 +55,9 @@ typedef struct Queue{
 
 // What do I have to do here??
  Queue jobQueue = {.head = NULL, .tail = NULL, .numberOfJobs = 0};
- pthread_cond_t waitForReadyJob;
+ pthread_cond_t forJobReady;
  pthread_mutex_t* accountLocks;
+ pthread_mutex_t queueMutex;
  int requestCounter = 1;
 
 // START
@@ -98,7 +101,8 @@ int main(int argc, char**argv){
     int threadIndex[numberOfWorkerThreads];
     //going to have to pass the accountMutex array to functions??
     pthread_mutex_t accountMutex[numberOfAccounts];
-    pthread_cond_init(&waitForReadyJob, NULL);
+    pthread_cond_init(&forJobReady, NULL);
+    pthread_mutex_init(&queueMutex, NULL);
 
     //create threads
     for(int i = 0; i < numberOfWorkerThreads; i++){
@@ -172,6 +176,7 @@ void parseUserRequest(char** commandString, int numInputs){
          req->numberOfTransactions = 1;
         //  end time still needs to be completed in worker thread
         // next request still needs to be completed in push thread
+        printf("----The value of the request is: %p\n", req);
         push(req);
         // pthread_cond_signal(&waitForReadyJob);
     }
@@ -192,10 +197,20 @@ void* workerThreadRequestHandler(void *arg){
     // pthread_cond_wait(&waitForReadyJob, &mutex);
 
     int account_ID = *((int*) arg);
-    pthread_mutex_lock(&accountLocks[account_ID]);
     printf("Worker thread ID: %d\n", account_ID);
 
-    pthread_mutex_unlock(&accountLocks[account_ID]);
+    // pthread_mutex_unlock(&accountLocks[account_ID]);
+
+    pthread_mutex_lock(&queueMutex); 
+    pthread_cond_wait(&forJobReady, &queueMutex);
+    // pthread_mutex_lock(&accountLocks[account_ID]);
+    Request *request = malloc(sizeof(Request));
+    request = pop(); 
+    printf("----The value of the request is: %p\n", request);
+    printf("----Request ID: %d", request->requestID);
+    // pthread_mutex_unlock(&accountLocks[account_ID]);
+    pthread_mutex_unlock(&queueMutex);
+    
 
     /*Need to get jobs from queue here*/
     /*wait condition*/
@@ -214,35 +229,36 @@ void freeStringArray(char** commandStringArray){
     free(commandStringArray);
 }
 
-Request* pop(Request *completedRequest){
-    
+Request* pop(){
+
   if(jobQueue.numberOfJobs == 0){
       return NULL;
   }
   else if(jobQueue.numberOfJobs == 1){
-      Request *result = malloc(sizeof(Request));
-      result = jobQueue.head;
+      Request* result = jobQueue.head;
       jobQueue.head = NULL;
       jobQueue.tail = NULL;
       jobQueue.numberOfJobs--;
+    //   returns Request struct
       return result;
 
   }
   else{
-      Request *result = malloc(sizeof(Request));
-      result = jobQueue.head;
-      jobQueue.head = completedRequest->nextRequest;
+      Request *result = result = jobQueue.head;
+      jobQueue.head = jobQueue.head->nextRequest;
       jobQueue.numberOfJobs--;
       return result;
   }
 }
 
 void push(Request *newRequest){
-    printf("I am pushing to the queue\n");
+    printf("I am pushing to the queue\nThe requestID = %d\nThe check accountID = %d\nStart time = %ld.%06.ld\n",newRequest->requestID, newRequest->checkAccountID, newRequest->startTime.tv_sec, newRequest->startTime.tv_usec);
+    
 
       if(jobQueue.numberOfJobs == 0){
         jobQueue.head = newRequest;
         jobQueue.tail = newRequest;
+        printf("----The value of the head is: %p\n", jobQueue.head);
         jobQueue.numberOfJobs++;
     }
     else if(jobQueue.numberOfJobs > 0){
@@ -250,4 +266,11 @@ void push(Request *newRequest){
         jobQueue.tail = newRequest;
         jobQueue.numberOfJobs++;
     }
+
+    
+    printf("Number of jobs in the queue: %d\n", jobQueue.numberOfJobs);
+    printf("----The value of the request is: %p\n", newRequest);
+    pthread_cond_broadcast(&forJobReady);
+
+    
 }
