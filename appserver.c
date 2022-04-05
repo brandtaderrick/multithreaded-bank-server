@@ -10,6 +10,7 @@ Bank Account Manager
 #include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sys/time.h>
 #include "Bank.h"
 
 #define INFINITE 1
@@ -20,6 +21,8 @@ Bank Account Manager
 void* workerThreadRequestHandler();
 void freeStringArray(char** commandStringArray);
 void parseUserRequest(char** commandString, int numInputs);
+void push();
+void pop();
 // void recordRequest();
 // void presentInfoToUser();
 // void processRequestInBackground();
@@ -35,7 +38,7 @@ typedef struct Transaction {
 } Transaction;
 
 typedef struct Request{
-    struct Request *S;  //pointer to the next request in the list
+    struct Request *nextRequest;  //pointer to the next request in the list
     int requestID;      //request ID assigned by the main thread
     int checkAccountID; //account ID for a check request
     Transaction* transactions; // array of transaction data
@@ -49,10 +52,12 @@ typedef struct Queue{
 } Queue;
 
 // What do I have to do here??
- Queue jobQueue;
+ Queue jobQueue = {.head = NULL, .tail = NULL, .numberOfJobs = 0};
  pthread_cond_t waitForReadyJob;
- pthread_mutex_t mutex;
+ pthread_mutex_t* accountLocks;
+ int requestCounter = 1;
 
+// START
 int main(int argc, char**argv){
     
     // declare variables
@@ -61,7 +66,6 @@ int main(int argc, char**argv){
     FILE *filePointer;
     char* fileName;
     char* errorMessage1 = "Error: incorrect input. Exiting. \n";
-    Request newRequest;
    
 
     //variables for user input
@@ -103,6 +107,8 @@ int main(int argc, char**argv){
     }
 
     /*initialize one mutex per bank account */
+    accountLocks = malloc(sizeof(pthread_mutex_t) * numberOfAccounts);
+
     for(int j = 0; j < numberOfAccounts; j++){
          pthread_mutex_init(&accountMutex[j], NULL);
     }
@@ -148,6 +154,7 @@ int main(int argc, char**argv){
 
     }
 
+    // END
 }
 void parseUserRequest(char** commandString, int numInputs){
 
@@ -156,7 +163,17 @@ void parseUserRequest(char** commandString, int numInputs){
         exit(0);
     }
     else if(strcmp(commandString[0], "CHECK") == 0){
-        pthread_cond_signal(&waitForReadyJob);
+         Request *req = malloc(sizeof(Request));
+         struct timeval time;
+         gettimeofday(&time, NULL);
+         req->startTime = time;
+         req->requestID = requestCounter;
+         req->checkAccountID = atoi(commandString[1]);
+         req->numberOfTransactions = 1;
+        //  end time still needs to be completed in worker thread
+        // next request still needs to be completed in push thread
+        push(req);
+        // pthread_cond_signal(&waitForReadyJob);
     }
     else if(strcmp(commandString[0], "TRANS") == 0){
 
@@ -170,17 +187,19 @@ void parseUserRequest(char** commandString, int numInputs){
 
 void* workerThreadRequestHandler(void *arg){
 
-    pthread_mutex_lock(&mutex);
+    
     // wait for the ready signal... should this come when we add a request to queue
-    pthread_cond_wait(&waitForReadyJob, &mutex);
+    // pthread_cond_wait(&waitForReadyJob, &mutex);
 
-    int thread_ID = *((int*) arg);
-    printf("Worker thread ID: %d\n", thread_ID);
+    int account_ID = *((int*) arg);
+    pthread_mutex_lock(&accountLocks[account_ID]);
+    printf("Worker thread ID: %d\n", account_ID);
 
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&accountLocks[account_ID]);
 
     /*Need to get jobs from queue here*/
     /*wait condition*/
+    // print to file
 
     return NULL;
 }
@@ -193,4 +212,21 @@ void freeStringArray(char** commandStringArray){
         j++;
     }
     free(commandStringArray);
+}
+
+void pop(Request *completedRequest){
+  
+}
+
+void push(Request *newRequest){
+    printf("I am pushing to the queue\n");
+
+      if(jobQueue.numberOfJobs == 0){
+        jobQueue.head = newRequest;
+        jobQueue.tail = newRequest;
+        jobQueue.numberOfJobs++;
+    }
+    else if(jobQueue.numberOfJobs > 0){
+        newRequest->nextRequest = jobQueue.tail;
+    }
 }
