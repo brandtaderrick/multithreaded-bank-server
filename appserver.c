@@ -22,7 +22,7 @@ void* workerThreadRequestHandler();
 void freeStringArray(char** commandStringArray);
 void parseUserRequest(char** commandString, int numInputs);
 void push();
-void pop();
+Request* pop();
 // void recordRequest();
 // void presentInfoToUser();
 // void processRequestInBackground();
@@ -214,8 +214,27 @@ void freeStringArray(char** commandStringArray){
     free(commandStringArray);
 }
 
-void pop(Request *completedRequest){
-  
+Request* pop(Request *completedRequest){
+    
+  if(jobQueue.numberOfJobs == 0){
+      return NULL;
+  }
+  else if(jobQueue.numberOfJobs == 1){
+      Request *result = malloc(sizeof(Request));
+      result = jobQueue.head;
+      jobQueue.head = NULL;
+      jobQueue.tail = NULL;
+      jobQueue.numberOfJobs--;
+      return result;
+
+  }
+  else{
+      Request *result = malloc(sizeof(Request));
+      result = jobQueue.head;
+      jobQueue.head = completedRequest->nextRequest;
+      jobQueue.numberOfJobs--;
+      return result;
+  }
 }
 
 void push(Request *newRequest){
@@ -227,6 +246,8 @@ void push(Request *newRequest){
         jobQueue.numberOfJobs++;
     }
     else if(jobQueue.numberOfJobs > 0){
-        newRequest->nextRequest = jobQueue.tail;
+        jobQueue.tail->nextRequest = newRequest;
+        jobQueue.tail = newRequest;
+        jobQueue.numberOfJobs++;
     }
 }
