@@ -203,24 +203,39 @@ void* workerThreadRequestHandler(void *arg){
     printf("Worker thread ID: %d\n", thread_ID);
 
     // pthread_mutex_unlock(&accountLocks[account_ID]);
-
+for(;;){
     pthread_mutex_lock(&queueMutex); 
-    for(;;){
+    
         while(jobQueue.numberOfJobs == 0){
             pthread_cond_wait(&forJobReady, &queueMutex);
         }
         
             Request *request = pop();
-            printf("POP--Worker number %d handling the job! The number of jobs in the queue: %d\n", thread_ID ,jobQueue.numberOfJobs);
-            // pthread_mutex_lock(&accountLocks[request->checkAccountID]);
-            //testing
-            printf("The value of the request is: %p\n", request);
-            printf("Request ID: %d\n\n", request->requestID);
 
-            filePointer = fopen(fileName, "a");
-            fprintf(filePointer, "%d\n",request->requestID);
-            fclose(filePointer);
-            fflush(stdout);
+            //if number of transactions == 0 then this is a CHECK request
+            if(request->numberOfTransactions == 0){
+                printf("POP--Worker number %d handling the job! The number of jobs in the queue: %d\n", thread_ID ,jobQueue.numberOfJobs);
+                // pthread_mutex_lock(&accountLocks[request->checkAccountID]);
+                //testing
+                printf("The value of the request is: %p\n", request);
+                printf("Request ID: %d\n\n", request->requestID);
+
+                struct timeval time;
+                gettimeofday(&time, NULL);
+                request->endTime = time;
+                filePointer = fopen(fileName, "a ");
+                // requestID, account balance, start time, end time
+                fprintf(filePointer, "%d BAL %d %ld.%06.ld %ld.%06.ld\n",request->requestID, read_account(request->checkAccountID), request->startTime, request->endTime);
+                fclose(filePointer);
+                fflush(stdout);
+            }
+            else if(request->numberOfTransactions > 0){
+
+            }
+            else{
+                printf("ERROR. ABORT.");
+                exit(1);
+            }
         // pthread_mutex_unlock(&accountLocks[account_ID]);
         // pthread_mutex_unlock(&accountLocks[request->checkAccountID]);
         pthread_mutex_unlock(&queueMutex);
