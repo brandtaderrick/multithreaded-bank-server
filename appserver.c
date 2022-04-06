@@ -184,7 +184,26 @@ void parseUserRequest(char** commandString, int numInputs){
         // pthread_cond_signal(&waitForReadyJob);
     }
     else if(strcmp(commandString[0], "TRANS") == 0){
+        Request *req = malloc(sizeof(Request));
+        Transaction* trans = malloc(sizeof(Transaction));
+        struct timeval time;
+        gettimeofday(&time, NULL);
+        req->startTime = time;
+        req->requestID = requestCounter;
+        req->numberOfTransactions = 1;
+        trans->acc_id = atoi(commandString[1]);
+        trans->amount = atoi(commandString[2]);
+        req->transactions = trans;
 
+        // for(int i = 1; i < numInputs; i + 2){
+        //     Transaction* trans = malloc(sizeof(Transaction));
+        //     trans->acc_id = atoi(commandString[i]);
+        //     trans->amount = atoi(commandString[i + 1]);
+        // }
+
+        requestCounter++;
+        push(req);
+        sleep(1);
     }
     else {
        printf("Unsupported input. Try again.\n");
@@ -230,6 +249,9 @@ for(;;){
                 fflush(stdout);
             }
             else if(request->numberOfTransactions > 0){
+                printf("Worker thread reached transaction code\n");
+                write_account(request->transactions->acc_id, request->transactions->acc_id);
+                printf(read_account(request->transactions->acc_id));
 
             }
             else{
