@@ -1,7 +1,7 @@
 CC	= gcc
-CFLAGS	= -Wall
+CFLAGS	= -Wall -pthread
 LDFLAGS = 
-OBJFILES	= appserver.o Bank.o 
+OBJFILES	= appserver.c Bank.c
 TARGET	= appserv
 
 all: $(TARGET)
