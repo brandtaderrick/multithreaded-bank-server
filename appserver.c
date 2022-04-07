@@ -163,7 +163,7 @@ int main(int argc, char**argv){
 }
 void parseUserRequest(char** commandString, int numInputs){
 
-    if(strcmp(commandString[0], "exit") == 0){
+    if(strcmp(commandString[0], "end") == 0){
         printf("Exiting\n");
         exit(0);
     }
@@ -185,22 +185,39 @@ void parseUserRequest(char** commandString, int numInputs){
     }
     else if(strcmp(commandString[0], "TRANS") == 0){
         Request *req = malloc(sizeof(Request));
-        Transaction* trans = malloc(sizeof(Transaction));
+        Transaction* trans = malloc(sizeof(Transaction) *(numInputs));
         struct timeval time;
         gettimeofday(&time, NULL);
         req->startTime = time;
         req->requestID = requestCounter;
-        req->numberOfTransactions = 1;
-        trans->acc_id = atoi(commandString[1]);
-        trans->amount = atoi(commandString[2]);
-        req->transactions = trans;
+        // trans->acc_id = atoi(commandString[1]); 
+        // trans->amount = atoi(commandString[2]);
+        
 
-        // for(int i = 1; i < numInputs; i + 2){
-        //     Transaction* trans = malloc(sizeof(Transaction));
-        //     trans->acc_id = atoi(commandString[i]);
-        //     trans->amount = atoi(commandString[i + 1]);
-        // }
+      
 
+        int i = 1;
+        int counter = 0;
+        while(commandString[i] != NULL){
+            if(commandString[i] == NULL){
+                printf("uh oh NULL");
+            }
+            printf("uh oh stinkyyyy");
+            trans[counter].acc_id = atoi(commandString[i]);
+            trans[counter].amount = atoi(commandString[i + 1]);
+            printf("check command string parse: %d", atoi(commandString[i]));
+            printf("check command string parse: %d", atoi(commandString[i + 1]));
+            req->numberOfTransactions++;
+            req->transactions = trans;
+            i = i + 2;
+            counter++;
+        }
+
+        
+        printf("Account ID: %d\n Amount to be added: %d\n",req->transactions[0].acc_id, req->transactions[0].amount);
+        printf("Account ID: %d\n Amount to be added: %d\n",req->transactions[1].acc_id, req->transactions[1].amount);
+
+        printf("number of account in transaction equals? %d\n", req->numberOfTransactions);
         requestCounter++;
         push(req);
         sleep(1);
@@ -242,7 +259,7 @@ for(;;){
                 struct timeval time;
                 gettimeofday(&time, NULL);
                 request->endTime = time;
-                filePointer = fopen(fileName, "a ");
+                filePointer = fopen(fileName, "a");
                 // requestID, account balance, start time, end time
                 fprintf(filePointer, "%d BAL %d %ld.%06.ld %ld.%06.ld\n",request->requestID, read_account(request->checkAccountID), request->startTime, request->endTime);
                 fclose(filePointer);
@@ -250,8 +267,44 @@ for(;;){
             }
             else if(request->numberOfTransactions > 0){
                 printf("Worker thread reached transaction code\n");
-                write_account(request->transactions->acc_id, request->transactions->acc_id);
-                printf(read_account(request->transactions->acc_id));
+
+                for(int i = 0; i < request->numberOfTransactions; i++){
+
+                        // get account information and check if balanace can handle a subtraction
+                    int account_balance = read_account(request->transactions[i].acc_id);
+                    printf("account balance correctly received with new syntax??? : %d", account_balance);
+                    if((account_balance + request->transactions[i].amount) < 0){
+                        printf("Denied. Insufficient Funds");
+                        struct timeval time;
+                        gettimeofday(&time, NULL);
+                        request->endTime = time;
+                        filePointer = fopen(fileName, "a");
+                        // requestID, account balance, start time, end time
+                        //             RequestID  ISF <accountID> <start time> <end time>
+                        fprintf(filePointer, "%d ISF %d %ld.%06.ld %ld.%06.ld\n",request->requestID, request->transactions[i].acc_id, request->startTime, request->endTime);
+                        fclose(filePointer);
+                        fflush(stdout);
+
+                    }
+                    else
+                    {
+                        // the transaction number is either positive or negative, so always add
+                        write_account(request->transactions[i].acc_id, (account_balance + request->transactions[i].amount));
+                        // successful transaction: write corresponding successful transaction string to log file
+                        struct timeval time;
+                        gettimeofday(&time, NULL);
+                        request->endTime = time;
+                        filePointer = fopen(fileName, "a");
+                        // requestID, account balance, start time, end time
+                        fprintf(filePointer, "%d OK TIME %ld.%06.ld %ld.%06.ld\n",request->requestID, request->startTime, request->endTime);
+                        fclose(filePointer);
+                        fflush(stdout);
+                        printf("Read account: %d\n", read_account(request->transactions[i].acc_id));
+                    }
+
+                }
+
+                
 
             }
             else{
