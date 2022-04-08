@@ -61,6 +61,8 @@ typedef struct Queue{
  int requestCounter = 1;
  FILE *filePointer;
  char* fileName;
+ //flag for END command
+ int flag = 1;
 
 // START
 int main(int argc, char**argv){
@@ -82,7 +84,7 @@ int main(int argc, char**argv){
 
     // conditioinally check for correct input
     if(argc != 4){
-            printf("Number of arguments: %d\n", argc);
+            // printf("Number of arguments: %d\n", argc);
             printf("%s",errorMessage1);
             exit(1);
     }
@@ -91,10 +93,6 @@ int main(int argc, char**argv){
         numberOfAccounts = atoi(argv[2]);
         fileName = argv[3];
     }
-
-    printf("numthreads: %d\n", numberOfWorkerThreads);
-    printf("numaccounts:%d\n", numberOfAccounts);
-    printf("filename:%s\n", fileName);
 
     /*declare and initialize threads, mutex, conditions */
     pthread_t workerThreads[numberOfWorkerThreads];
@@ -119,7 +117,7 @@ int main(int argc, char**argv){
 
     /* initialize actual bank accounts */
     if(initialize_accounts(numberOfAccounts) == 1){
-        printf("All accounts successfuly initialized. \n");
+        //succesfully initialized
     }
 
     /*initialize output file */
@@ -132,7 +130,7 @@ int main(int argc, char**argv){
         parsed_command = malloc(1); 
         i = 0;
         // FGETS
-        printf("%s", "Please enter your request: \n");
+        // printf("%s", "Please enter your request: \n");
         fgets(commandUserEnters, COMMANDSIZE, stdin);  
         // get the length of the command to facilitate changing end character
         stringLength = strlen(commandUserEnters);
@@ -164,6 +162,10 @@ int main(int argc, char**argv){
 void parseUserRequest(char** commandString, int numInputs){
 
     if(strcmp(commandString[0], "END") == 0){
+        while(jobQueue.numberOfJobs > 0){
+
+        }
+        flag = 0;
         printf("Exiting\n");
         exit(0);
     }
@@ -175,13 +177,11 @@ void parseUserRequest(char** commandString, int numInputs){
          req->requestID = requestCounter;
          req->checkAccountID = atoi(commandString[1]);
          req->numberOfTransactions = 0;
-        //  end time still needs to be completed in worker thread
-        // next request still needs to be completed in push thread
-        printf("MAIN--ID %d\nThe value of the request is: %p\n",requestCounter, req);
-        requestCounter++;
-        push(req);
-        usleep(1);
-        // pthread_cond_signal(&waitForReadyJob);
+         //  end time still needs to be completed in worker thread
+         // next request still needs to be completed in push thread
+         requestCounter++;
+         push(req);
+        //  usleep(1);
     }
     else if(strcmp(commandString[0], "TRANS") == 0){
         Request *req = malloc(sizeof(Request));
@@ -191,11 +191,6 @@ void parseUserRequest(char** commandString, int numInputs){
         req->startTime = time;
         req->requestID = requestCounter;
         req->numberOfTransactions = 0;
-        // trans->acc_id = atoi(commandString[1]); 
-        // trans->amount = atoi(commandString[2]);
-        
-
-      
 
         int i = 1;
         int counter = 0;
@@ -203,30 +198,22 @@ void parseUserRequest(char** commandString, int numInputs){
             if(commandString[i] == NULL){
                 printf("uh oh NULL");
             }
-            printf("uh oh stinkyyyy");
             trans[counter].acc_id = atoi(commandString[i]);
             trans[counter].amount = atoi(commandString[i + 1]);
-            printf("check command string parse: %d\n", atoi(commandString[i]));
-            printf("check command string parse: %d\n", atoi(commandString[i + 1]));
             req->numberOfTransactions = req->numberOfTransactions + 1;
-            printf("Number of Transactions: %d\n", req->numberOfTransactions);
             req->transactions = trans;
             i = i + 2;
             counter++;
         }
-
-        
-        printf("Account ID: %d\n Amount to be added: %d\n",req->transactions[0].acc_id, req->transactions[0].amount);
-        printf("Account ID: %d\n Amount to be added: %d\n",req->transactions[1].acc_id, req->transactions[1].amount);
-
-        printf("number of account in transaction equals? %d\n", req->numberOfTransactions);
         requestCounter++;
         push(req);
-        // sleep(1);
+        // usleep(1);
     }
     else {
        printf("Unsupported input. Try again.\n");
     }
+
+    printf("ID %d\n", requestCounter);
 
 }
 
@@ -237,11 +224,10 @@ void* workerThreadRequestHandler(void *arg){
     // wait for the ready signal... should this come when we add a request to queue
     // pthread_cond_wait(&waitForReadyJob, &mutex);
 
-    int thread_ID = *((int*) arg);
-    printf("Worker thread ID: %d\n", thread_ID);
 
     // pthread_mutex_unlock(&accountLocks[account_ID]);
-for(;;){
+while(flag){
+
     pthread_mutex_lock(&queueMutex); 
 
         int i;
@@ -254,12 +240,9 @@ for(;;){
 
             //if number of transactions == 0 then this is a CHECK request
             if(request->numberOfTransactions == 0){
-                printf("POP--Worker number %d handling the job! The number of jobs in the queue: %d\n", thread_ID ,jobQueue.numberOfJobs);
-                // pthread_mutex_lock(&accountLocks[request->checkAccountID]);
+                pthread_mutex_lock(&accountLocks[request->checkAccountID]);
                 //testing
-                printf("The value of the request is: %p\n", request);
-                printf("Request ID: %d\n\n", request->requestID);
-                 struct timeval time;
+                struct timeval time;
                 gettimeofday(&time, NULL);
                 request->endTime = time;
                 filePointer = fopen(fileName, "a");
@@ -267,21 +250,43 @@ for(;;){
                 fprintf(filePointer, "%d BAL %d %ld.%06.ld %ld.%06.ld\n",request->requestID, read_account(request->checkAccountID), request->startTime.tv_sec, request->startTime.tv_usec, request->endTime.tv_sec, request->endTime.tv_usec);
                 fclose(filePointer);
                 fflush(stdout);
+                pthread_mutex_unlock(&accountLocks[request->checkAccountID]);
             }
             else if(request->numberOfTransactions > 0){
-                printf("Worker thread reached transaction code\nNum transactions = %d\n", request->numberOfTransactions);
+                
                 int account_balance;
+                int ISF_or_Success;
 
                 for(i = 0; i < request->numberOfTransactions; i++){
 
+                    // printf("%d\n", request->transactions[i].acc_id);
+
                      pthread_mutex_lock(&accountLocks[request->transactions[i].acc_id]);
 
-                        // get account information and check if balanace can handle a subtraction
+                    // get account information and check if balanace can handle a subtraction
                     account_balance = read_account(request->transactions[i].acc_id);
                     // printf("account balance correctly received with new syntax??? : %d", account_balance);
 
                     if((account_balance + request->transactions[i].amount) < 0){
-                        printf("Denied. Insufficient Funds");
+                        // printf("Denied. Insufficient Funds");
+                        ISF_or_Success = 0;
+				
+                    }
+                    else
+                    {
+                        // the transaction number is either positive or negative, so always add
+                        write_account(request->transactions[i].acc_id, (account_balance + request->transactions[i].amount));
+                        // successful transaction: write corresponding successful transaction string to log file
+                        ISF_or_Success = 1;
+                    }
+
+                    pthread_mutex_unlock(&accountLocks[request->transactions[i].acc_id]);
+                    
+
+                }
+
+                  if(ISF_or_Success == 0){
+                        // print ISF
                         struct timeval time;
                         gettimeofday(&time, NULL);
                         request->endTime = time;
@@ -291,35 +296,18 @@ for(;;){
                         fprintf(filePointer, "%d ISF %d %ld.%06.ld %ld.%06.ld\n",request->requestID, request->transactions[i].acc_id, request->startTime.tv_sec, request->startTime.tv_usec, request->endTime.tv_sec, request->endTime.tv_usec);
                         fclose(filePointer);
                         fflush(stdout);
-
                     }
-                    else
-                    {
-                        // the transaction number is either positive or negative, so always add
-                        write_account(request->transactions[i].acc_id, (account_balance + request->transactions[i].amount));
-                        // successful transaction: write corresponding successful transaction string to log file
-                         
-                        // filePointer = fopen(fileName, "a");
-                        // // requestID, account balance, start time, end time
-                        
-                        // fclose(filePointer);
-                        // fflush(stdout);
-                        // printf("Read account: %d\n", read_account(request->transactions[i].acc_id));
+                    else{
+                        //print SUCCESS
+                        struct timeval time;
+                        gettimeofday(&time, NULL);
+                        request->endTime = time;
+                        filePointer = fopen(fileName, "a");
+                        // requestID, account balance, start time, end time
+                        fprintf(filePointer, "%d OK TIME %ld.%06.ld %ld.%06.ld\n",request->requestID, request->startTime.tv_sec, request->startTime.tv_usec, request->endTime.tv_sec, request->endTime.tv_usec);
+                        fclose(filePointer);
+                        fflush(stdout);
                     }
-
-                    pthread_mutex_unlock(&accountLocks[request->transactions[i].acc_id]);
-                    
-
-                }
-
-                struct timeval time;
-                gettimeofday(&time, NULL);
-                request->endTime = time;
-                filePointer = fopen(fileName, "a");
-                // requestID, account balance, start time, end time
-                fprintf(filePointer, "%d OK TIME %ld.%06.ld %ld.%06.ld\n",request->requestID, request->startTime.tv_sec, request->startTime.tv_usec, request->endTime.tv_sec, request->endTime.tv_usec);
-                fclose(filePointer);
-                fflush(stdout);
                 
 
             }
@@ -329,7 +317,7 @@ for(;;){
             }
         // pthread_mutex_unlock(&accountLocks[account_ID]);
         // pthread_mutex_unlock(&accountLocks[request->checkAccountID]);
-        printf("just before mutex unlock with transaction");
+        // printf("just before queue mutex unlock with transaction");
         pthread_mutex_unlock(&queueMutex);
 
         // pthread_cond_destroy(&forJobReady);
@@ -342,6 +330,7 @@ for(;;){
         }
     return NULL;
 }
+
 
 void freeStringArray(char** commandStringArray){
     int j = 0;
@@ -377,14 +366,12 @@ Request* pop(){
 
 void push(Request *newRequest){
     //testing
-    printf("PUSH--I am pushing to the queue\nThe requestID = %d\nThe check accountID = %d\nStart time = %ld.%06.ld\n",newRequest->requestID, newRequest->checkAccountID, newRequest->startTime.tv_sec, newRequest->startTime.tv_usec);
+    
     
 
       if(jobQueue.numberOfJobs == 0){
         jobQueue.head = newRequest;
         jobQueue.tail = newRequest;
-        printf("The value of the head is: %p\n", jobQueue.head);
-        printf("The value of the tail is: %p\n", jobQueue.tail);
         jobQueue.numberOfJobs++;
     }
     else if(jobQueue.numberOfJobs > 0){
@@ -394,8 +381,6 @@ void push(Request *newRequest){
     }
 
     //testing
-    printf("Number of jobs in the queue: %d\n", jobQueue.numberOfJobs);
-    printf("The value of the request is: %p\n", newRequest);
     pthread_cond_broadcast(&forJobReady);
 
     
