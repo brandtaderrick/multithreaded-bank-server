@@ -23,11 +23,6 @@ void freeStringArray(char** commandStringArray);
 void parseUserRequest(char** commandString, int numInputs);
 void push();
 
-// void recordRequest();
-// void presentInfoToUser();
-// void processRequestInBackground();
-// void printToFile();
-
 // structure for a transaction pair
 typedef struct Transaction {   
      //account id  &
@@ -53,7 +48,6 @@ typedef struct Queue{
     int numberOfJobs; //number of jobs currently in queue
 } Queue;
 
-// What do I have to do here??
  Queue jobQueue = {.head = NULL, .tail = NULL, .numberOfJobs = 0};
  pthread_cond_t forJobReady;
  pthread_mutex_t* accountLocks;
@@ -220,12 +214,6 @@ void parseUserRequest(char** commandString, int numInputs){
 
 void* workerThreadRequestHandler(void *arg){
 
-    
-    // wait for the ready signal... should this come when we add a request to queue
-    // pthread_cond_wait(&waitForReadyJob, &mutex);
-
-
-    // pthread_mutex_unlock(&accountLocks[account_ID]);
 while(flag){
 
     pthread_mutex_lock(&queueMutex); 
@@ -258,8 +246,6 @@ while(flag){
                 int ISF_or_Success;
 
                 for(i = 0; i < request->numberOfTransactions; i++){
-
-                    // printf("%d\n", request->transactions[i].acc_id);
 
                      pthread_mutex_lock(&accountLocks[request->transactions[i].acc_id]);
 
@@ -315,18 +301,8 @@ while(flag){
                 printf("ERROR. ABORT.");
                 exit(1);
             }
-        // pthread_mutex_unlock(&accountLocks[account_ID]);
-        // pthread_mutex_unlock(&accountLocks[request->checkAccountID]);
-        // printf("just before queue mutex unlock with transaction");
         pthread_mutex_unlock(&queueMutex);
 
-        // pthread_cond_destroy(&forJobReady);
-        // pthread_cond_init(&forJobReady, NULL);
-        
-
-        /*Need to get jobs from queue here*/
-        /*wait condition*/
-        // print to file
         }
     return NULL;
 }
@@ -365,10 +341,7 @@ Request* pop(){
 }
 
 void push(Request *newRequest){
-    //testing
     
-    
-
       if(jobQueue.numberOfJobs == 0){
         jobQueue.head = newRequest;
         jobQueue.tail = newRequest;
